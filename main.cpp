@@ -14,6 +14,7 @@
 
 #include "Scene.hpp"
 
+
 using namespace std;
 using namespace rt;
 
@@ -23,14 +24,11 @@ inline Line getRayForPixel(int x, int y, const Vector3& camera, const Vector3& f
     return Line{camera, targetPos, false};
 }
 
-inline Color traceRay(const Line& ray, float minDist, float maxDist) {
+inline Intersection* traceRay(const Line& ray, float minDist, float maxDist) {
     Intersection* closestIntersection = nullptr;
 
     for (auto geometry: scene) {
         auto intersection = geometry->getIntersection(ray, minDist, maxDist);
-//        if (intersection) {
-//            return intersection->getBody().getColor();
-//        }
         if (!closestIntersection && intersection) {
             closestIntersection = intersection;
         } else if (intersection && intersection->getDistanceFromSource() < closestIntersection->getDistanceFromSource()) {
@@ -39,11 +37,38 @@ inline Color traceRay(const Line& ray, float minDist, float maxDist) {
         }
     }
 
-    if (!closestIntersection) {
+    return closestIntersection;
+}
+
+Color calculateLightColor(Intersection* intersection, const Vector3& viewPoint) {
+    if (intersection == nullptr) {
         return Color{0.0f, 0.0f, 0.0f};
     }
 
-    return closestIntersection->getBody().getColor();
+    Color color{};
+
+    for (auto light: lights) {
+        auto baseColor = intersection->getBody().getMaterial().getAmbient() * light->getAmbient();
+
+        auto N = intersection->getBody().normal(intersection->getIntersectionPoint());
+        auto T = light->getPosition() - intersection->getIntersectionPoint();
+        T.normalize();
+        auto NT = N * T;
+        if (NT > 0) {
+            baseColor += intersection->getBody().getMaterial().getDiffuse() * light->getDiffuse() * NT;
+        }
+        auto R = N * NT * 2 - T;
+        R.normalize();
+        auto E = viewPoint - intersection->getIntersectionPoint();
+        E.normalize();
+        auto ER = E * R;
+        if (ER > 0) {
+            baseColor += intersection->getBody().getMaterial().getSpecular() * light->getSpecular() * powf(ER, intersection->getBody().getMaterial().getShininess());
+        }
+        color += baseColor;
+    }
+
+    return color;
 }
 
 int main() {
@@ -68,21 +93,14 @@ int main() {
     Image image{static_cast<unsigned int>(imageWidth), static_cast<unsigned int>(imageHeight)};
 
 
-    auto start = clock();
-    clock_t rayStart;
-    auto total = 0;
     for (auto x = 0; x < imageWidth; x++) {
         for (auto y = 0; y < imageHeight; y++) {
             auto&& ray = getRayForPixel(x, y, viewPoint, viewDirection, viewUp, viewParallel, viewPlaneDist, viewPlaneWidth, viewPlaneHeight);
-            rayStart = clock();
-            auto&& color = traceRay(ray, frontPlaneDist, backPlaneDist);
-            total += clock() - rayStart;
-            image.setPixel(x, y, color);
+            auto&& intersection = traceRay(ray, frontPlaneDist, backPlaneDist);
+            auto&& lightColor = calculateLightColor(intersection, viewPoint);
+            image.setPixel(x, y, lightColor);
         }
     }
-
-    cout << clock() - start << " / " << total <<'\n';
-
     image.store("../scene.png");
 
 

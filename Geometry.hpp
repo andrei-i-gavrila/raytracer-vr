@@ -26,8 +26,6 @@ namespace rt {
 
         virtual ~Geometry() = default;
 
-        virtual Intersection* getIntersection(const Line& line, float minDist, float maxDist) const = 0;
-
         inline const Material& getMaterial() const {
             return material;
         }
@@ -36,7 +34,9 @@ namespace rt {
             return color;
         }
 
-        virtual inline const Vector3 normal(const Vector3& vec) const = 0;
+        virtual Intersection* getIntersection(const Line& line, float minDist, float maxDist) const = 0;
+
+        virtual const Vector3 normal(const Vector3& vec) const = 0;
     };
 }
 
